@@ -35,6 +35,9 @@ try:  # optional import
 except ImportError:
     MambaLMHeadModel = None
 
+from open_lm.ttt import TTTLinear, TTTMLP
+
+
 # from openclip
 _MODEL_CONFIG_PATHS = [Path(__file__).parent / f"model_configs/"]
 _MODEL_CONFIGS = {}  # directory (model_name: config) of model architecture configs
@@ -98,6 +101,11 @@ class Params:
     moe_freq: int = 0
     positional_embedding_type: str = "rotary"
     ffn_type: str = "swiglu"
+    # @xinhao: add TTT's attributes below
+    ttt_base_lr: float = 1.0
+    mini_batch_size: int = 16
+    scan_checkpoint_group_size: int = 4
+    rope_theta: float = 10000.0
 
 
 def get_pos_embed(args: Params):
@@ -243,7 +251,10 @@ class Block(nn.Module):
         self.dim = args.dim
 
         self.head_dim = args.dim // args.n_heads
-        self.attention = CustomAttn(layer_id, args)
+
+        # self.attention = CustomAttn(layer_id, args)
+        self.attention = TTTLinear(layer_id, args)
+
         self._ffn_type = args.ffn_type
         if args.ffn_type == "swiglu":
             # this follows llama / lit llama -- go to multiple of 256
@@ -309,13 +320,15 @@ class Block(nn.Module):
             torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
 
     def forward(self, x, past_key_value=None, use_cache=False, attention_mask=None):
-        h, past_key_value = self.attention(
-            self.attention_norm(x),
-            is_causal=True,
-            past_key_value=past_key_value,
-            use_cache=use_cache,
-            attention_mask=attention_mask,
-        )
+        # h, past_key_value = self.attention(
+        #     self.attention_norm(x),
+        #     is_causal=True,
+        #     past_key_value=past_key_value,
+        #     use_cache=use_cache,
+        #     attention_mask=attention_mask,
+        # )
+        h = self.attention(x)
+        past_key_value = None
         h = x + h
         if self._ffn_type == "moe":
             ffn_out, _ = self.feed_forward(self.ffn_norm(h))
