@@ -143,3 +143,9 @@ tests/assets/source_*/*
 secrets.env
 checkpoints/
 experiments/
+
+# xinhao dev
+.idea
+DS_Store
+*.sh
+exp/
